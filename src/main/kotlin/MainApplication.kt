@@ -1,58 +1,90 @@
 package com.jamespatrickkeegan
 
-import sun.misc.OSEnvironment
 
 interface Token {
-    abstract fun getValue(): Any
+
+    abstract fun getValue(): Any?
 }
 
 class EndOfFileToken: Token {
     override fun getValue() = "EOF"
 }
 
-class OperatorToken(private val value: String): Token {
-    override fun getValue() = value
+class OperatorToken(private val operatorSymbol: String): Token {
+    override fun getValue() = operatorSymbol
+}
+
+class LeftParenToken: Token {
+    override fun getValue() = "("
+}
+
+class RightParenToken: Token {
+    override fun getValue() = ")"
 }
 
 class IntegerToken(private val value: Int): Token {
     override fun getValue() = value
 }
 
-class Interpreter(private val expression: String) {
+class Lexer(private val text: String) {
     private var index = 0
-    private var result = 0
 
-    private fun getNextToken(): Token {
+    public fun getNextToken(): Token {
         skipWhitespace()
 
-        when {
-            index > expression.length - 1 -> {
-                return EndOfFileToken()
-            }
-            expression[index].isDigit() -> {
-                var digits: String = ""
+        return when {
+            index > text.length - 1 -> EndOfFileToken()
+            text[index].isDigit() -> getNextIntegerToken()
+            text[index] == '+' -> getNextOperatorToken("+")
+            text[index] == '-' -> getNextOperatorToken("-")
+            text[index] == '*' -> getNextOperatorToken("*")
+            text[index] == '/' -> getNextOperatorToken("/")
+            text[index] == '(' -> getNextLeftParenToken()
+            text[index] == ')' -> getNextRightParenToken()
 
-                digits += expression[index]
-                ++index
-
-                while (index < expression.length && expression[index].isDigit()) {
-                    digits += expression[index]
-                    ++index
-                }
-
-                return IntegerToken(digits.toInt())
-            }
-            expression[index] == '+' -> {
-                ++index
-                return OperatorToken("+")
-            }
-            expression[index] == '-' -> {
-                ++index
-                return OperatorToken("-")
-            }
-            else -> throw Exception("Failed to parse '%s'".format(expression[index]))
+            else -> throw Exception("Failed to parse '%s'".format(text[index]))
         }
     }
+
+    private fun getNextLeftParenToken(): LeftParenToken {
+        index++
+        return LeftParenToken()
+    }
+
+    private fun getNextRightParenToken(): RightParenToken {
+        index++
+        return RightParenToken()
+    }
+
+    private fun getNextOperatorToken(operatorSymbol: String): OperatorToken {
+        index++
+        return OperatorToken(operatorSymbol)
+    }
+
+    private fun getNextIntegerToken(): Token {
+        var digits = ""
+
+        digits += text[index]
+        ++index
+
+        while (index < text.length && text[index].isDigit()) {
+            digits += text[index]
+            ++index
+        }
+
+        return IntegerToken(digits.toInt())
+    }
+
+    private fun skipWhitespace() {
+        while (index < text.length && text[index].isWhitespace()) {
+            index++
+        }
+    }
+}
+
+class Interpreter(private val expression: String) {
+    private var lexer: Lexer = Lexer(expression)
+    private var result: Double = 0.0
 
     private inline fun <reified T: Token> eatToken(token: Token): T {
          if (token !is T) {
@@ -60,52 +92,45 @@ class Interpreter(private val expression: String) {
                  T::class, token::class
              ))
          }
-
         return token as T
     }
 
-    private fun skipWhitespace() {
-        while (index < expression.length && expression[index].isWhitespace()) {
-            index++
-        }
+    private fun expression() {
+
     }
 
-    public fun evaluate(): Int {
+    private fun factor(): Double {
+        return eatToken<IntegerToken>(lexer.getNextToken())
+            .getValue()
+            .toDouble()
+    }
 
-        var nextToken = getNextToken()
-
-        val left: Int = eatToken<IntegerToken>(nextToken).getValue()
-
-        result += left
+    private fun term(): Double {
+        var result = factor()
+        val operatorToken = eatToken<OperatorToken>(lexer.getNextToken())
 
         while (true) {
-            nextToken = getNextToken()
+            val rightHandSide = factor()
 
-            if (nextToken is EndOfFileToken) {
-                break
+            result *= when (operatorToken.getValue()) {
+                "*" -> rightHandSide
+                "/" -> 1 / rightHandSide
+                else -> throw Exception("Error: Wrong operator.")
             }
 
-            val operator: String = eatToken<OperatorToken>(nextToken).getValue()
-            val right: Int = eatToken<IntegerToken>(getNextToken()).getValue()
-
-            if (operator == "+") {
-                result += right
-            }
-            else if (operator == "-") {
-                result -= right
-            }
-            else {
-                throw Exception("OPERATOR ERROR")
-            }
+            break
         }
 
         return result
+    }
+
+    public fun evaluate(): Double {
+        return term()
     }
 }
 
 fun main(args: Array<String>) {
     val inputText = readLine()
-
     val interpreter: Interpreter = Interpreter(
         inputText ?: ""
     )
