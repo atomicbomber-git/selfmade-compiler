@@ -2,8 +2,7 @@ package com.jamespatrickkeegan
 
 
 interface Token {
-
-    abstract fun getValue(): Any?
+    fun getValue(): Any?
 }
 
 class EndOfFileToken: Token {
@@ -29,7 +28,7 @@ class IntegerToken(private val value: Int): Token {
 class Lexer(private val text: String) {
     private var index = 0
 
-    public fun getNextToken(): Token {
+    fun getNextToken(): Token {
         skipWhitespace()
 
         return when {
@@ -82,9 +81,9 @@ class Lexer(private val text: String) {
     }
 }
 
-class Interpreter(private val expression: String) {
+class Interpreter(expression: String) {
     private var lexer: Lexer = Lexer(expression)
-    private var result: Double = 0.0
+    private var currentToken: Token = lexer.getNextToken()
 
     private inline fun <reified T: Token> eatToken(token: Token): T {
          if (token !is T) {
@@ -92,24 +91,53 @@ class Interpreter(private val expression: String) {
                  T::class, token::class
              ))
          }
-        return token as T
+
+        currentToken = lexer.getNextToken()
+        return token
     }
 
-    private fun expression() {
+    private fun expression(): Double {
+        var result = term()
 
+        while (true) {
+            if (!(currentToken.getValue() == "+" || currentToken.getValue() == "-")) {
+                return result
+            }
+
+            val operatorToken = eatToken<OperatorToken>(currentToken)
+            val rightHandSide = term()
+
+            result += when (operatorToken.getValue()) {
+                "+" -> rightHandSide
+                "-" -> -rightHandSide
+                else -> throw Exception("Error: Wrong operator.")
+            }
+        }
     }
 
     private fun factor(): Double {
-        return eatToken<IntegerToken>(lexer.getNextToken())
-            .getValue()
-            .toDouble()
+        return when(currentToken) {
+            is IntegerToken -> eatToken<IntegerToken>(currentToken).getValue().toDouble()
+            is LeftParenToken -> {
+                eatToken<LeftParenToken>(currentToken)
+                val result: Double = this.expression()
+                eatToken<RightParenToken>(currentToken)
+                return result
+            }
+            else -> throw Exception("SYNTAX ERROR")
+        }
     }
 
     private fun term(): Double {
         var result = factor()
-        val operatorToken = eatToken<OperatorToken>(lexer.getNextToken())
 
         while (true) {
+            if (!(currentToken.getValue() == "/" || currentToken.getValue() == "*")) {
+                return result
+            }
+
+            val operatorToken = eatToken<OperatorToken>(currentToken)
+
             val rightHandSide = factor()
 
             result *= when (operatorToken.getValue()) {
@@ -117,21 +145,19 @@ class Interpreter(private val expression: String) {
                 "/" -> 1 / rightHandSide
                 else -> throw Exception("Error: Wrong operator.")
             }
-
-            break
         }
-
-        return result
     }
 
-    public fun evaluate(): Double {
-        return term()
+    fun evaluate(): Double {
+        return expression()
     }
 }
 
 fun main(args: Array<String>) {
+    println("Please type your mathematical expression down here:")
+
     val inputText = readLine()
-    val interpreter: Interpreter = Interpreter(
+    val interpreter = Interpreter(
         inputText ?: ""
     )
 
