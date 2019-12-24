@@ -100,10 +100,33 @@ class BinaryOperatorTree(
     }
 }
 
-class NumberTree(private val token: Token): Tree {
-    override fun getToken(): Token = token
+class NumberTree(private val token: IntegerToken): Tree {
+    override fun getToken(): IntegerToken = token
     override fun print() = println("Encountered NumberTree with value " + token.getValue())
 }
+
+class NormalTreeVisitor(private val tree: Tree) {
+    fun visit(): Double {
+        when (tree) {
+            is NumberTree -> return tree.getToken().getValue().toDouble()
+            is BinaryOperatorTree -> {
+                val leftHandSide = NormalTreeVisitor(tree.leftTree).visit()
+                val rightHandSide = NormalTreeVisitor(tree.rightTree).visit()
+
+                return when(tree.getToken().getValue()) {
+                    "*" -> leftHandSide * rightHandSide
+                    "/" -> leftHandSide / rightHandSide
+                    "-" -> leftHandSide - rightHandSide
+                    "+" -> leftHandSide + rightHandSide
+                    else -> throw Exception("Unknown operator exception.")
+                }
+            }
+            else -> throw Exception("Unknown tree type.")
+        }
+    }
+}
+
+
 
 class Parser(expression: String) {
     private var lexer: Lexer = Lexer(expression)
@@ -123,7 +146,7 @@ class Parser(expression: String) {
     }
 
     private fun expression(): Tree {
-        val leftHandSide = term()
+        var leftHandSide = term()
 
         while (true) {
             if (!(currentToken.getValue() == "+" || currentToken.getValue() == "-")) {
@@ -133,7 +156,7 @@ class Parser(expression: String) {
             val operatorToken = eatCurrentToken<OperatorToken>()
             val rightHandSide = term()
 
-            return when (operatorToken.getValue()) {
+            leftHandSide = when (operatorToken.getValue()) {
                 "+" -> BinaryOperatorTree(leftHandSide, rightHandSide, operatorToken)
                 "-" -> BinaryOperatorTree(leftHandSide, rightHandSide, operatorToken)
                 else -> throw Exception("Error: Wrong operator.")
@@ -155,7 +178,7 @@ class Parser(expression: String) {
     }
 
     private fun term(): Tree {
-        val leftHandSide = factor()
+        var leftHandSide = factor()
 
         while (true) {
             if (!(currentToken.getValue() == "/" || currentToken.getValue() == "*")) {
@@ -165,17 +188,9 @@ class Parser(expression: String) {
             val operatorToken = eatCurrentToken<OperatorToken>()
             val rightHandSide = factor()
 
-            return when (operatorToken.getValue()) {
-                "*" -> BinaryOperatorTree(
-                    leftHandSide,
-                    rightHandSide,
-                    operatorToken
-                )
-                "/" -> BinaryOperatorTree(
-                    leftHandSide,
-                    rightHandSide,
-                    operatorToken
-                )
+            leftHandSide = when (operatorToken.getValue()) {
+                "*" -> BinaryOperatorTree(leftHandSide, rightHandSide, operatorToken)
+                "/" -> BinaryOperatorTree(leftHandSide, rightHandSide, operatorToken)
                 else -> throw Exception("Error: Unknown or wrong operator")
             }
         }
@@ -187,15 +202,25 @@ class Parser(expression: String) {
 }
 
 fun main(args: Array<String>) {
-    println("Please type your mathematical expression down here:")
 
-    val inputText = readLine()
-    val parser = Parser(
-        inputText ?: ""
-    )
+    while (true) {
+        println("Please type your mathematical expression down here (q for quit):")
 
-    val tree: Tree = parser.parse()
-    tree.print()
+        val inputText = readLine()
+
+        if (inputText.equals("q")) {
+            break
+        }
+
+        val parser = Parser(
+            inputText ?: ""
+        )
+
+        val tree: Tree = parser.parse()
+        tree.print()
+
+        println(NormalTreeVisitor(tree).visit())
+    }
 }
 
 
