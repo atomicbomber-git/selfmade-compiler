@@ -81,74 +81,107 @@ class Lexer(private val text: String) {
     }
 }
 
-class Interpreter(expression: String) {
+interface Tree {
+    fun getToken(): Token
+    fun print()
+}
+
+class BinaryOperatorTree(
+    val leftTree: Tree,
+    val rightTree: Tree,
+    private val token: Token
+): Tree
+{
+    override fun getToken() = token
+    override fun print() {
+        println("Encountered BinaryOperatorTree with value " + token.getValue())
+        leftTree.print()
+        rightTree.print()
+    }
+}
+
+class NumberTree(private val token: Token): Tree {
+    override fun getToken(): Token = token
+    override fun print() = println("Encountered NumberTree with value " + token.getValue())
+}
+
+class Parser(expression: String) {
     private var lexer: Lexer = Lexer(expression)
     private var currentToken: Token = lexer.getNextToken()
 
-    private inline fun <reified T: Token> eatToken(token: Token): T {
-         if (token !is T) {
-             throw Exception("Syntax error, expected %s but got %s".format(
-                 T::class, token::class
-             ))
-         }
+    private inline fun <reified T: Token> eatCurrentToken(): T {
+        if (currentToken !is T) {
+            throw Exception("Syntax error, expected %s but got %s".format(
+                T::class, currentToken::class
+            ))
+        }
 
+        val oldToken = currentToken
         currentToken = lexer.getNextToken()
-        return token
+
+        return oldToken as T
     }
 
-    private fun expression(): Double {
-        var result = term()
+    private fun expression(): Tree {
+        val leftHandSide = term()
 
         while (true) {
             if (!(currentToken.getValue() == "+" || currentToken.getValue() == "-")) {
-                return result
+                return leftHandSide
             }
 
-            val operatorToken = eatToken<OperatorToken>(currentToken)
+            val operatorToken = eatCurrentToken<OperatorToken>()
             val rightHandSide = term()
 
-            result += when (operatorToken.getValue()) {
-                "+" -> rightHandSide
-                "-" -> -rightHandSide
+            return when (operatorToken.getValue()) {
+                "+" -> BinaryOperatorTree(leftHandSide, rightHandSide, operatorToken)
+                "-" -> BinaryOperatorTree(leftHandSide, rightHandSide, operatorToken)
                 else -> throw Exception("Error: Wrong operator.")
             }
         }
     }
 
-    private fun factor(): Double {
+    private fun factor(): Tree {
         return when(currentToken) {
-            is IntegerToken -> eatToken<IntegerToken>(currentToken).getValue().toDouble()
+            is IntegerToken -> NumberTree(eatCurrentToken<IntegerToken>())
             is LeftParenToken -> {
-                eatToken<LeftParenToken>(currentToken)
-                val result: Double = this.expression()
-                eatToken<RightParenToken>(currentToken)
+                eatCurrentToken<LeftParenToken>()
+                val result = expression()
+                eatCurrentToken<RightParenToken>()
                 return result
             }
             else -> throw Exception("SYNTAX ERROR")
         }
     }
 
-    private fun term(): Double {
-        var result = factor()
+    private fun term(): Tree {
+        val leftHandSide = factor()
 
         while (true) {
             if (!(currentToken.getValue() == "/" || currentToken.getValue() == "*")) {
-                return result
+                return leftHandSide
             }
 
-            val operatorToken = eatToken<OperatorToken>(currentToken)
-
+            val operatorToken = eatCurrentToken<OperatorToken>()
             val rightHandSide = factor()
 
-            result *= when (operatorToken.getValue()) {
-                "*" -> rightHandSide
-                "/" -> 1 / rightHandSide
-                else -> throw Exception("Error: Wrong operator.")
+            return when (operatorToken.getValue()) {
+                "*" -> BinaryOperatorTree(
+                    leftHandSide,
+                    rightHandSide,
+                    operatorToken
+                )
+                "/" -> BinaryOperatorTree(
+                    leftHandSide,
+                    rightHandSide,
+                    operatorToken
+                )
+                else -> throw Exception("Error: Unknown or wrong operator")
             }
         }
     }
 
-    fun evaluate(): Double {
+    fun parse(): Tree {
         return expression()
     }
 }
@@ -157,12 +190,12 @@ fun main(args: Array<String>) {
     println("Please type your mathematical expression down here:")
 
     val inputText = readLine()
-    val interpreter = Interpreter(
+    val parser = Parser(
         inputText ?: ""
     )
 
-    val result = interpreter.evaluate()
-    println(result)
+    val tree: Tree = parser.parse()
+    tree.print()
 }
 
 
